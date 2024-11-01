@@ -1,0 +1,25 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  loadbalancing:
+    routing_key: streamID # route on a per-stream basis
+    resolver:
+      dns:
+        hostname: worker # send to a stable worker of the pool
+    protocol:
+      otlp:
+        tls:
+          insecure: true # for testing, properly configure TLS in production
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      exporters: [loadbalancing]
+  telemetry:
+    metrics:
+      address: :8888

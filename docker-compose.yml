@@ -1,0 +1,42 @@
+services:
+  # application generating delta metrics, writes to loadbal using OTLP
+  app:
+    build: ./deltagen
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://loadbal:4318
+      OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: delta
+    scale: 8
+
+  # stateless collector, routing incoming metrics to workers based on stream-id
+  loadbal:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    volumes:
+      - ./loadbal.yml:/etc/otelcol-contrib/config.yaml
+    scale: 1
+
+  # stateful collector, converting from delta to cumulative and remote_writing to prometheus
+  worker:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    volumes:
+      - ./worker.yml:/etc/otelcol-contrib/config.yaml
+    scale: 2
+
+  # prometheus server, receiving cumulative metrics over remote_write
+  prometheus:
+    image: prom/prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./.state/prometheus:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --enable-feature=remote-write-receiver
+    user: 0:0
+ 
+  grafana:
+    image: grafana/grafana
+    ports: [3000:3000]
+    volumes:
+      - ./.state/grafana:/var/lib/grafana
+    user: 0:0
